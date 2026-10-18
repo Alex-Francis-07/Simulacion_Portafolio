@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 
 
 class VistaBase(ABC):
+    """Toda vista debe tener estos métodos."""
 
     @abstractmethod
     def mostrar_inestable(self, esc):

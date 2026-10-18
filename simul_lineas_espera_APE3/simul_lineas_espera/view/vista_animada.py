@@ -1,7 +1,6 @@
 import os
 import sys
 import time
-from collections import deque
 
 import matplotlib
 matplotlib.use("Agg")           
@@ -17,17 +16,17 @@ AMARILLO = "\033[93m"
 GRIS = "\033[90m"
 RESET = "\033[0m"
 
-BARRAS = "▁▂▃▄▅▆▇█"      
-HUECOS = 8               
-
+HUECOS = 8              
+ANCHO = 5               
 
 class VistaAnimada(VistaConsola):
-   
-    def __init__(self, ventana=40, seg_por_unidad=0.25, carpeta="graficas"):
+    """Consola con la cola en movimiento; al final guarda las gráficas en una carpeta."""
+
+    def __init__(self, ventana=40, seg_por_unidad=1.0, carpeta="graficas"):
         self.ventana = ventana                  
         self.seg_por_unidad = seg_por_unidad    
         self.carpeta = carpeta
-        os.makedirs(carpeta, exist_ok=True)    
+        os.makedirs(carpeta, exist_ok=True)     
 
     def mostrar_escenario(self, esc, t, s):
         try:
@@ -43,71 +42,64 @@ class VistaAnimada(VistaConsola):
     # 1) Convertir los eventos del modelo en "cuadros" (fotos de la cola)
     # ------------------------------------------------------------------
     def armar_cuadros(self, eventos):
-        cola = deque()
-        llegada_de = {}
-        est = {"servidor": None, "llegadas": 0, "atendidos": 0,
-               "iniciados": 0, "espera_total": 0.0, "cola_max": 0}
+        cola = []                   
+        servidor = None            
+        llegadas = 0
+        atendidos = 0
+        cola_max = 0
+        esperas = []                
+        llegada_de = {}            
+        mensajes = []               
 
-        cuadros = [self.tomar_cuadro(0.0, "Inicia la simulación", cola, est)]
+        cuadros = [{"tiempo": 0.0, "mensaje": "Inicia la simulación", "cola": [],
+                    "servidor": None, "llegadas": 0, "atendidos": 0,
+                    "cola_max": 0, "espera_prom": 0.0}]
 
-        i = 0
-        while i < len(eventos) and eventos[i][0] <= self.ventana:
-            tiempo = eventos[i][0]
+        for i in range(len(eventos)):
+            tiempo, tipo, cid = eventos[i]
+            if tiempo > self.ventana:
+                break
+
+            if tipo == "llegada":
+                cola.append(cid)
+                llegada_de[cid] = tiempo
+                llegadas += 1
+                mensajes.append(f"Llega el cliente #{cid}")
+            elif tipo == "inicio":
+                cola.remove(cid)
+                servidor = cid
+                espera = tiempo - llegada_de[cid]
+                esperas.append(espera)
+                mensajes.append(f"#{cid} pasa al servidor (esperó {espera:.2f})")
+            else:  
+                servidor = None
+                atendidos += 1
+                mensajes.append(f"#{cid} termina y sale")
+
+            hay_mas_en_este_instante = (i + 1 < len(eventos)
+                                        and eventos[i + 1][0] == tiempo)
+            if hay_mas_en_este_instante:
+                continue
+
+            cola_max = max(cola_max, len(cola))
+            espera_prom = sum(esperas) / len(esperas) if esperas else 0.0
+            cuadros.append({"tiempo": tiempo, "mensaje": "  →  ".join(mensajes),
+                            "cola": list(cola), "servidor": servidor,
+                            "llegadas": llegadas, "atendidos": atendidos,
+                            "cola_max": cola_max, "espera_prom": espera_prom})
             mensajes = []
-            
-            while i < len(eventos) and eventos[i][0] == tiempo:
-                _, tipo, cid = eventos[i]
-                if tipo == "llegada":
-                    cola.append(cid)
-                    llegada_de[cid] = tiempo
-                    est["llegadas"] += 1
-                    mensajes.append(f"Llega el cliente #{cid}")
-                elif tipo == "inicio":
-                    cola.remove(cid)
-                    est["servidor"] = cid
-                    espera = tiempo - llegada_de[cid]
-                    est["iniciados"] += 1
-                    est["espera_total"] += espera
-                    mensajes.append(f"#{cid} pasa al servidor (esperó {espera:.2f})")
-                else:  
-                    est["servidor"] = None
-                    est["atendidos"] += 1
-                    mensajes.append(f"#{cid} termina y sale")
-                i += 1
-            est["cola_max"] = max(est["cola_max"], len(cola))
-            cuadros.append(self.tomar_cuadro(tiempo, "  →  ".join(mensajes), cola, est))
 
-        cuadros.append(self.tomar_cuadro(self.ventana, "Fin de la animación", cola, est))
+        cuadros.append(dict(cuadros[-1], tiempo=self.ventana, mensaje="Fin de la animación"))
         return cuadros
-
-    def tomar_cuadro(self, tiempo, mensaje, cola, est):
-        prom = est["espera_total"] / est["iniciados"] if est["iniciados"] else 0.0
-        return {"tiempo": tiempo, "mensaje": mensaje, "cola": list(cola),
-                "servidor": est["servidor"], "llegadas": est["llegadas"],
-                "atendidos": est["atendidos"], "cola_max": est["cola_max"],
-                "espera_prom": prom}
-
-    def armar_serie(self, cuadros, muestras=50):
-        
-        paso = self.ventana / muestras
-        serie = []
-        j = 0
-        for k in range(muestras):
-            instante = k * paso
-            while j + 1 < len(cuadros) and cuadros[j + 1]["tiempo"] <= instante:
-                j += 1
-            serie.append(len(cuadros[j]["cola"]))
-        return serie
 
     # ------------------------------------------------------------------
     # 2) Mostrar los cuadros uno tras otro
     # ------------------------------------------------------------------
     def reproducir(self, esc, cuadros):
-        serie = self.armar_serie(cuadros)
-        sys.stdout.write("\033[?25l")                 
+        sys.stdout.write("\033[?25l")                
         try:
             for i, cuadro in enumerate(cuadros):
-                lineas = self.dibujar(esc, cuadro, serie)
+                lineas = self.dibujar(esc, cuadro)
                 if i > 0:
                     sys.stdout.write(f"\033[{len(lineas)}A")   
                 sys.stdout.write("".join(l + "\033[K\n" for l in lineas))
@@ -119,29 +111,31 @@ class VistaAnimada(VistaConsola):
             print("\nAnimación detenida.")
         finally:
             sys.stdout.write("\033[?25h")             
+            sys.stdout.flush()
 
-    def dibujar(self, esc, c, serie):
-     
+    def dibujar(self, esc, c):
         avance = int(c["tiempo"] / self.ventana * 30)
         barra = "█" * avance + "░" * (30 - avance)
 
         frente = c["cola"][:HUECOS]
-        extra = len(c["cola"]) - len(frente)
-        prefijo = f"{'+' + str(extra) if extra else '':>5}"
-        casillas = [" " * 5] * (HUECOS - len(frente))
-        casillas += [f"{CYAN}[{n:>3}]{RESET}" for n in reversed(frente)]
-        tubo = "─" * (5 + HUECOS * 5)
+        extra = len(c["cola"]) - len(frente)       
+        if extra > 0:
+            prefijo = f"+{extra}".rjust(ANCHO)
+        else:
+            prefijo = " " * ANCHO
+        casillas = " " * (ANCHO * (HUECOS - len(frente)))
+        for numero in reversed(frente):
+            casillas += f"{CYAN}[{numero:>3}]{RESET}"
+        tubo = "─" * (ANCHO * (HUECOS + 1))
 
         if c["servidor"] is None:
             servidor = f"{GRIS}[ libre ]{RESET}"
         else:
             servidor = f"{VERDE}[ #{c['servidor']:<3}]{RESET}"
 
-        en_sistema = len(c["cola"]) + (0 if c["servidor"] is None else 1)
-
-        n = min(len(serie), int(c["tiempo"] / self.ventana * len(serie)) + 1)
-        maximo = max(max(serie), 1)
-        grafico = "".join(BARRAS[round(q / maximo * 7)] for q in serie[:n])
+        en_sistema = len(c["cola"])
+        if c["servidor"] is not None:
+            en_sistema += 1
 
         return [
             f"{NEGRITA}ESCENARIO {esc.numero}  |  λ={esc.lam}  μ={esc.mu}  "
@@ -150,14 +144,13 @@ class VistaAnimada(VistaConsola):
             "",
             "  LLEGADAS ──▶   COLA (FIFO)                          SERVIDOR",
             f"  ┌{tubo}┐",
-            f"  │{prefijo}{''.join(casillas)}│ ▶ {servidor}",
+            f"  │{prefijo}{casillas}│ ▶ {servidor}",
             f"  └{tubo}┘",
             "",
             f"  En cola: {len(c['cola']):<3} En sistema: {en_sistema:<3} "
             f"Llegadas: {c['llegadas']:<4} Atendidos: {c['atendidos']:<4} "
             f"Cola máx: {c['cola_max']}",
             f"  Espera promedio hasta ahora: {c['espera_prom']:.2f}",
-            f"  Cola vs tiempo: {grafico}{' ' * (len(serie) - n)} (máx {max(serie)})",
             f"  Evento: {c['mensaje'][:66]}",
         ]
 
@@ -179,9 +172,11 @@ class VistaAnimada(VistaConsola):
         plt.close(fig)                          
 
     def grafica_cola(self, resultados, ventana=100):
+        """Tamaño de la cola en el tiempo (primeras 'ventana' unidades)."""
         fig, ejes = plt.subplots(len(resultados), 1, figsize=(10, 8),
                                  sharex=True, squeeze=False)
-        for eje, (esc, t, s) in zip(ejes.flatten(), resultados):
+        ejes = ejes.flatten()
+        for eje, (esc, t, s) in zip(ejes, resultados):
             tiempos = [p[0] for p in s.traza_cola if p[0] <= ventana]
             colas = [p[1] for p in s.traza_cola if p[0] <= ventana]
             eje.step(tiempos, colas, where="post", color="tab:blue")
@@ -193,14 +188,16 @@ class VistaAnimada(VistaConsola):
                           f"(ρ={esc.rho():.2f})")
             eje.set_ylabel("Clientes en cola")
             eje.legend(loc="upper left")
-        ejes.flatten()[-1].set_xlabel("Tiempo")
+        ejes[-1].set_xlabel("Tiempo")
         fig.suptitle(f"Tamaño de la cola en el tiempo (primeras {ventana} unidades)")
         self.guardar(fig, "1_tamano_cola.png")
 
     def grafica_esperas(self, resultados, cantidad=300):
+        """Tiempo de espera de los primeros 'cantidad' clientes."""
         fig, ejes = plt.subplots(len(resultados), 1, figsize=(10, 8),
                                  sharex=True, squeeze=False)
-        for eje, (esc, t, s) in zip(ejes.flatten(), resultados):
+        ejes = ejes.flatten()
+        for eje, (esc, t, s) in zip(ejes, resultados):
             esperas = s.tiempos_espera[:cantidad]
             eje.plot(range(1, len(esperas) + 1), esperas,
                      color="tab:orange", linewidth=0.9)
@@ -211,7 +208,7 @@ class VistaAnimada(VistaConsola):
             eje.set_title(f"Escenario {esc.numero}: λ={esc.lam}, μ={esc.mu}")
             eje.set_ylabel("Espera en cola")
             eje.legend(loc="upper right")
-        ejes.flatten()[-1].set_xlabel("Número de cliente")
+        ejes[-1].set_xlabel("Número de cliente")
         fig.suptitle(f"Tiempo de espera de los primeros {cantidad} clientes")
         self.guardar(fig, "2_tiempos_espera.png")
 

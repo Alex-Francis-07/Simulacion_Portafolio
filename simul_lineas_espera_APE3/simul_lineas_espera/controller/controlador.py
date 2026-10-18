@@ -3,8 +3,7 @@ import threading
 
 from model.factory import FabricaEscenarios, FabricaEstrategias
 
-FIN = object()      # marca que el productor ya terminó
-
+FIN = object()     
 
 class ControladorSimulacion:
     """Conecta el modelo con la vista usando dos hilos.
@@ -20,7 +19,6 @@ class ControladorSimulacion:
         self.simulada = FabricaEstrategias.crear("simulado")
 
     def producir(self, cola):
-        """Hilo productor: calcula los escenarios y los pone en la cola."""
         try:
             for esc in FabricaEscenarios.crear_todos():
                 if not esc.es_estable():
@@ -28,14 +26,13 @@ class ControladorSimulacion:
                     continue
                 t = self.teorica.calcular(esc)
                 s = self.simulada.calcular(esc)
-                cola.put((esc, t, s))       # se bloquea si el consumidor aún no libera la cola
-        except Exception as error:          # si falla, el consumidor lo vuelve a lanzar
+                cola.put((esc, t, s))       
+        except Exception as error:         
             cola.put(error)
         finally:
             cola.put(FIN)
 
     def ejecutar(self):
-        # maxsize=1: el productor calcula el siguiente escenario mientras se anima el actual
         cola = queue.Queue(maxsize=1)
         productor = threading.Thread(target=self.producir, args=(cola,),
                                      name="productor", daemon=True)

@@ -32,16 +32,15 @@ class EstrategiaSimulada(EstrategiaMetricas):
     """Calcula simulando clientes con SimPy."""
 
     def calcular(self, esc):
-        rng = np.random.default_rng(esc.semilla)    # generador aleatorio con semilla
+        rng = np.random.default_rng(esc.semilla)    
         env = simpy.Environment()
-        servidor = simpy.Resource(env, capacity=1)  # un solo servidor
+        servidor = simpy.Resource(env, capacity=1)  
 
-        esperas = []                # tiempo que esperó cada cliente en la cola
-        estancias = []              # tiempo total de cada cliente en el sistema
-        traza = [(0.0, 0)]          # (tiempo, tamaño de la cola) para graficar
-        eventos = []                # (tiempo, tipo, cliente) para la animación
+        esperas = []                
+        estancias = []              
+        traza = [(0.0, 0)]          
+        eventos = []                
 
-        # Acumuladores para promediar en el tiempo
         acum = {"ultimo": 0.0, "area_cola": 0.0,
                 "area_sistema": 0.0, "ocupado": 0.0}
 
@@ -60,12 +59,12 @@ class EstrategiaSimulada(EstrategiaMetricas):
             eventos.append((env.now, "llegada", numero))
             actualizar()
             with servidor.request() as pedido:
-                traza.append((env.now, len(servidor.queue)))    # llegó: la cola puede crecer
-                yield pedido                                    # espera su turno
-                traza.append((env.now, len(servidor.queue)))    # empieza servicio: la cola baja
+                traza.append((env.now, len(servidor.queue)))    
+                yield pedido                                    
+                traza.append((env.now, len(servidor.queue)))    
                 eventos.append((env.now, "inicio", numero))
                 esperas.append(env.now - llegada)
-                yield env.timeout(rng.exponential(1 / esc.mu))  # lo atienden
+                yield env.timeout(rng.exponential(1 / esc.mu))  
                 estancias.append(env.now - llegada)
                 actualizar()
                 eventos.append((env.now, "salida", numero))
@@ -73,7 +72,7 @@ class EstrategiaSimulada(EstrategiaMetricas):
         def generador_de_clientes():
             numero = 0
             while True:
-                yield env.timeout(rng.exponential(1 / esc.lam))  # tiempo entre llegadas
+                yield env.timeout(rng.exponential(1 / esc.lam)) 
                 numero += 1
                 env.process(cliente(numero))
 
@@ -88,8 +87,4 @@ class EstrategiaSimulada(EstrategiaMetricas):
         W = sum(estancias) / len(estancias)
         Wq = sum(esperas) / len(esperas)
 
-        resultado = Metricas(rho, L, Lq, W, Wq)
-        resultado.tiempos_espera = esperas
-        resultado.traza_cola = traza
-        resultado.eventos = eventos
-        return resultado
+        return Metricas(rho, L, Lq, W, Wq, esperas, traza, eventos)

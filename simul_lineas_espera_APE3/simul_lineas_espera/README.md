@@ -2,19 +2,38 @@
 
 Programa en Python que **compara el modelo teórico de una cola M/M/1 con una simulación de eventos discretos**. Para cada escenario (λ, μ) calcula las métricas ρ, L, Lq, W y Wq de dos formas (fórmulas y simulación con SimPy), anima la cola en la terminal y guarda tres gráficas comparativas.
 
+## Contenido
+
+1. [Tecnologías](#1-tecnologías)
+2. [Fundamento teórico](#2-fundamento-teórico)
+3. [Instalación](#3-instalación)
+4. [Cómo ejecutar](#4-cómo-ejecutar)
+5. [Cómo usar el programa](#5-cómo-usar-el-programa)
+6. [Estructura del proyecto](#6-estructura-del-proyecto)
+7. [Patrones de diseño](#7-patrones-de-diseño)
+8. [Flujo de ejecución](#8-flujo-de-ejecución)
+9. [Cómo extender el proyecto](#9-cómo-extender-el-proyecto)
+10. [Resultados de ejemplo](#10-resultados-de-ejemplo)
+11. [Problemas frecuentes](#11-problemas-frecuentes)
+
+---
+
 ## 1. Tecnologías
 
 | Tecnología | Versión usada en el desarrollo | Para qué se usa |
 |---|---|---|
 | Python | 3.14.4 (según `.venv/pyvenv.cfg`) | Lenguaje del proyecto |
-| [SimPy] | 4.1.2 | Simulación de eventos discretos (llegadas, cola y servidor) |
-| [NumPy]| 2.5.4 | Generador aleatorio con semilla y distribución exponencial |
-| [Matplotlib] | 3.11.2 | Gráficas guardadas como imágenes PNG (backend `Agg`, sin ventanas) |
+| [SimPy](https://simpy.readthedocs.io/) | 4.1.2 | Simulación de eventos discretos (llegadas, cola y servidor) |
+| [NumPy](https://numpy.org/) | 2.5.4 | Generador aleatorio con semilla y distribución exponencial |
+| [Matplotlib](https://matplotlib.org/) | 3.11.2 | Gráficas guardadas como imágenes PNG (backend `Agg`, sin ventanas) |
 
-Del lenguaje estándar se usan: `abc` (clases abstractas), `threading` y `queue` (hilos y comunicación entre ellos), `collections.deque` (cola de clientes en la animación), `os`, `sys` y `time`.
+Del lenguaje estándar se usan: `abc` (clases abstractas), `threading` y `queue` (hilos y comunicación entre ellos), `os`, `sys` y `time`.
 
 La animación en consola usa **códigos ANSI** (colores y movimiento del cursor), por lo que no requiere ninguna librería adicional.
 
+> `requirements.txt` no fija versiones. Las de la tabla son las que están instaladas en el `.venv` incluido en el proyecto.
+
+---
 
 ## 2. Fundamento teórico
 
@@ -81,6 +100,9 @@ Si λ ≥ μ el sistema es inestable (la cola crece sin límite). El programa lo
    | Sistema | Comando |
    |---|---|
    | Linux / macOS | `source .venv/bin/activate` |
+   | Windows (PowerShell) | `.venv\Scripts\Activate.ps1` |
+   | Windows (cmd) | `.venv\Scripts\activate.bat` |
+
 4. Instala las dependencias:
 
    ```bash
@@ -88,6 +110,16 @@ Si λ ≥ μ el sistema es inestable (la cola crece sin límite). El programa lo
    ```
 
    Esto instala `simpy`, `matplotlib` y `numpy` (contenido de `requirements.txt`).
+
+5. Comprueba la instalación:
+
+   ```bash
+   python -c "import simpy, numpy, matplotlib; print('Todo listo')"
+   ```
+
+> Si copias o compartes el proyecto, no hace falta incluir la carpeta `.venv`: cada persona la recrea con los pasos 2 a 4.
+
+---
 
 ## 4. Cómo ejecutar
 
@@ -97,7 +129,7 @@ Desde la carpeta del proyecto (donde está `main.py`) y con el entorno virtual a
 python main.py
 ```
 
-> **Importante:** ejecútalo desde la carpeta raíz del proyecto. Los módulos se importan como `from model...`, `from view...` y `from controller...`, así que Python necesita que esa carpeta sea el directorio actual.
+> **Nota:** también puedes lanzarlo desde otra carpeta indicando la ruta (`python ruta/a/main.py`). La diferencia es que la carpeta `graficas/` se crea en la carpeta desde donde lo ejecutas, no junto a `main.py`.
 
 ---
 
@@ -112,20 +144,31 @@ python main.py
 
 ### Qué muestra la animación
 
-Se anima solo la **ventana inicial de 40 unidades de tiempo simulado** (a razón de 1.0 s reales por unidad, unos 10 segundos por escenario):
+Se anima solo la **ventana inicial de 40 unidades de tiempo simulado** (a razón de 0.25 s reales por unidad, unos 10 segundos por escenario):
 
 - Barra de progreso del tiempo.
 - La cola FIFO (los 8 clientes más cercanos al servidor; si hay más se muestra `+N`) y el estado del servidor (`libre` u ocupado con el número de cliente).
 - Contadores: en cola, en el sistema, llegadas, atendidos, cola máxima y espera promedio hasta ese momento.
-- Un mini gráfico de barras con el tamaño de la cola en el tiempo.
 - El último evento ocurrido (llegada, paso al servidor, salida).
+
+### Gráficas generadas (carpeta `graficas/`)
+
+| Archivo | Contenido |
+|---|---|
+| `1_tamano_cola.png` | Tamaño de la cola en las primeras 100 unidades de tiempo, con Lq teórico y simulado |
+| `2_tiempos_espera.png` | Tiempo de espera de los primeros 300 clientes, con Wq teórico y simulado |
+| `3_comparacion.png` | Barras teórico vs. simulado para L, Lq, W y Wq en cada escenario |
+
+![Tamaño de la cola](graficas/1_tamano_cola.png)
+![Tiempos de espera](graficas/2_tiempos_espera.png)
+![Comparación teórico vs simulado](graficas/3_comparacion.png)
 
 ### Parámetros que puedes cambiar
 
 | Qué | Dónde | Valor actual |
 |---|---|---|
 | Tiempo simulado que se anima | `VistaAnimada(ventana=...)` en `main.py` | `40` |
-| Velocidad de la animación (segundos reales por unidad simulada) | `VistaAnimada(seg_por_unidad=...)` en `main.py` | `1.0` |
+| Velocidad de la animación (segundos reales por unidad simulada) | `VistaAnimada(seg_por_unidad=...)` en `main.py` | `0.25` |
 | Carpeta de las gráficas | `VistaAnimada(carpeta=...)` | `"graficas"` |
 | Escenarios (λ, μ, descripción) | `FabricaEscenarios.crear_todos()` en `model/factory.py` | 3 escenarios |
 | Duración de la simulación | `Escenarios(tiempo_simulacion=...)` en `model/escenarios.py` | `10000.0` |
@@ -264,9 +307,8 @@ ControladorSimulacion.ejecutar()
 ### Cómo funciona la animación (`VistaAnimada`)
 
 1. `armar_cuadros` recorre los eventos del modelo (`llegada`, `inicio`, `salida`) y genera un "cuadro" por cada instante (los eventos simultáneos van en el mismo cuadro).
-2. `armar_serie` toma el tamaño de la cola a intervalos iguales para el mini gráfico.
-3. `reproducir` dibuja los cuadros uno tras otro y espera entre ellos el tiempo simulado multiplicado por `seg_por_unidad` (con un máximo de 1.5 s por pausa).
-4. `dibujar` construye las líneas de texto de cada cuadro. Para redibujar sobre el mismo lugar, `reproducir` sube el cursor tantas líneas como tiene el cuadro (`\033[NA`); al terminar, vuelve a mostrar el cursor.
+2. `reproducir` dibuja los cuadros uno tras otro y espera entre ellos el tiempo simulado multiplicado por `seg_por_unidad` (con un máximo de 1.5 s por pausa).
+3. `dibujar` construye las líneas de texto de cada cuadro. Para redibujar sobre el mismo lugar, `reproducir` sube el cursor tantas líneas como tiene el cuadro (`\033[NA`); al terminar, vuelve a mostrar el cursor.
 
 ---
 
@@ -312,3 +354,14 @@ Esc      λ    μ    ρ(T)    L(T)    L(S)   Lq(T)   Lq(S)    W(T)    W(S)   Wq(
 
 ---
 
+## 11. Problemas frecuentes
+
+| Problema | Posible causa y solución |
+|---|---|
+| `ModuleNotFoundError: No module named 'simpy'` (o `numpy`, `matplotlib`) | Falta instalar dependencias o no está activado el entorno virtual. Repite los pasos 3 y 4 de la instalación. |
+| Aparecen símbolos extraños (`←[96m`, `?`) en lugar de colores o de `λ μ ρ` | La terminal no interpreta ANSI o UTF-8. Usa una terminal moderna (por ejemplo, Windows Terminal en Windows). |
+| La animación se ve "apilada" en vez de redibujarse en el mismo lugar | La terminal no soporta el movimiento del cursor con códigos ANSI. |
+| No se abren ventanas con las gráficas | Es lo esperado: se usa el backend `Agg` y solo se guardan archivos PNG en `graficas/`. |
+| Quiero saltar la animación | Pulsa **Ctrl+C** durante la reproducción. |
+
+> El programa se probó en Linux. No se verificó el comportamiento en Windows ni en macOS.
