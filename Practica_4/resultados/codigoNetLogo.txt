@@ -1,0 +1,192 @@
+extensions [csv]
+
+globals [
+  datos
+  indice
+  tiempo-actual
+  susceptibles
+  infectados
+  recuperados
+  poblacion
+]
+
+turtles-own [estado]
+
+
+to cargar-java
+  let ruta user-file
+  if ruta = false [ stop ]
+
+  ;; Revisar el archivo antes de reemplazar la simulacion.
+  let nuevas-filas []
+
+  carefully [
+    let contenido csv:from-file ruta
+
+    if length contenido < 2 [
+      error "El archivo debe contener encabezado y datos."
+    ]
+
+    if first contenido !=
+      ["tiempo" "susceptibles" "infectados" "recuperados"] [
+      error "El encabezado no coincide con el CSV esperado."
+    ]
+
+    set nuevas-filas but-first contenido
+    validar-datos nuevas-filas
+  ] [
+    user-message (word "No se pudo cargar el CSV: " error-message)
+    stop
+  ]
+
+  set datos nuevas-filas
+  reiniciar
+end
+
+
+to validar-datos [filas]
+  let total-inicial 0
+  let anterior []
+
+  foreach filas [fila ->
+    if length fila != 4 [
+      error "Cada fila debe tener exactamente cuatro columnas."
+    ]
+
+    foreach fila [valor ->
+      if not is-number? valor [
+        error "Todos los datos deben ser numericos."
+      ]
+      if valor < 0 or valor != floor valor [
+        error "Se requieren tiempos y cantidades enteros no negativos."
+      ]
+    ]
+
+    let total sum but-first fila
+
+    ifelse empty? anterior [
+      set total-inicial total
+      if total-inicial <= 0 [
+        error "La poblacion debe ser mayor que cero."
+      ]
+      if item 0 fila != 0 [
+        error "La primera fila debe corresponder al tiempo cero."
+      ]
+    ] [
+      if item 0 fila != (item 0 anterior + 1) [
+        error "Los tiempos deben avanzar de uno en uno."
+      ]
+      if item 1 fila > item 1 anterior [
+        error "Los susceptibles no pueden aumentar en este modelo SIR."
+      ]
+      if item 3 fila < item 3 anterior [
+        error "Los recuperados no pueden disminuir."
+      ]
+      if (item 3 fila - item 3 anterior) > item 2 anterior [
+        error "Las recuperaciones superan los infectados del paso anterior."
+      ]
+    ]
+
+    if total != total-inicial [
+      error "La poblacion total cambia entre filas."
+    ]
+
+    set anterior fila
+  ]
+end
+
+
+to reiniciar
+  if not is-list? datos [
+    user-message "Primero carga el CSV de Java."
+    stop
+  ]
+  if empty? datos [ stop ]
+
+  clear-turtles
+  clear-patches
+  clear-all-plots
+
+  set indice 0
+  actualizar-valores first datos
+  set poblacion susceptibles + infectados + recuperados
+
+  ask patches [ set pcolor white ]
+
+  create-turtles poblacion [
+    setxy random-xcor random-ycor
+    set shape "person"
+    set size 1.3
+    set estado "S"
+    set color green
+  ]
+
+  ask n-of infectados turtles [
+    set estado "I"
+    set color red
+  ]
+
+  ask n-of recuperados (turtles with [estado = "S"]) [
+    set estado "R"
+    set color blue
+  ]
+
+  reset-ticks
+  dibujar
+end
+
+
+to avanzar
+  if not is-list? datos [
+    user-message "Primero carga el CSV de Java."
+    stop
+  ]
+
+  if indice >= (length datos - 1) [ stop ]
+
+  let siguiente item (indice + 1) datos
+  let nuevos-contagios susceptibles - item 1 siguiente
+  let nuevas-recuperaciones item 3 siguiente - recuperados
+
+  ;; Recuperar personas que ya estaban infectadas.
+  ask n-of nuevas-recuperaciones
+    (turtles with [estado = "I"]) [
+      set estado "R"
+      set color blue
+    ]
+
+  ;; Infectar personas que estaban susceptibles.
+  ask n-of nuevos-contagios
+    (turtles with [estado = "S"]) [
+      set estado "I"
+      set color red
+    ]
+
+  set indice indice + 1
+  actualizar-valores siguiente
+
+  tick
+  dibujar
+end
+
+
+to actualizar-valores [fila]
+  set tiempo-actual item 0 fila
+  set susceptibles item 1 fila
+  set infectados item 2 fila
+  set recuperados item 3 fila
+end
+
+
+to dibujar
+  set-current-plot "Evolucion SIR"
+
+  set-current-plot-pen "Susceptibles"
+  plotxy tiempo-actual susceptibles
+
+  set-current-plot-pen "Infectados"
+  plotxy tiempo-actual infectados
+
+  set-current-plot-pen "Recuperados"
+  plotxy tiempo-actual recuperados
+end
