@@ -42,14 +42,6 @@ mvn --version
 
 Instala un JDK 17 o superior y Maven si no están disponibles. NetLogo debe estar instalado para utilizar la interfaz; no es necesario para ejecutar Java y obtener el CSV. La primera compilación Maven necesita acceso a sus repositorios, salvo que las dependencias y plugins ya estén almacenados en la caché local.
 
-En este equipo `mvn` no está en PATH, pero existe esta distribución local:
-
-```bash
-/home/feder/.m2/wrapper/dists/apache-maven-3.9.11-bin/86516310/apache-maven-3.9.11/bin/mvn --version
-```
-
-Puedes usar la ruta completa en lugar de `mvn` en los comandos siguientes. Esa ruta pertenece a este equipo y no es un requisito portable del proyecto.
-
 ### 2. Compilar y generar el JAR
 
 Desde la raíz del proyecto:
